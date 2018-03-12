@@ -150,11 +150,11 @@ public class ArcanePhsics : MonoBehaviour
         /* 바운더리 벽 체크해서 텔포해도 안넘어가게 했다.*/
         if(this.transform.position.x < leftBoundaryWall.transform.position.x && this.transform.localScale.x < 0.0f)
         {
-            this.transform.position = new Vector3(leftBoundaryWall.transform.position.x + 1.6f, this.transform.position.y, this.transform.position.z);
+            this.transform.position = new Vector3(leftBoundaryWall.transform.position.x + 2f, this.transform.position.y, this.transform.position.z);
         }
         else if(this.transform.position.x > rightBoundaryWall.transform.position.x && this.transform.localScale.x > 0.0f)
         {
-            this.transform.position = new Vector3(rightBoundaryWall.transform.position.x - 1.6f, this.transform.position.y, this.transform.position.z);
+            this.transform.position = new Vector3(rightBoundaryWall.transform.position.x - 2f, this.transform.position.y, this.transform.position.z);
         }
         else
         {
@@ -242,7 +242,7 @@ public class ArcanePhsics : MonoBehaviour
         }
 
         /*(코드설명) 윤동준 이곳이 대쉬키 true || false를 받고 PlayerController 클래스의 Dash 함수로 넘어감 */
-        playerController.Dash();
+        playerController.Dash(moveForce, isGrounded, isBoundaryWalled, playerObject);
     }
 
     //총 발사 공격 윤동준
@@ -300,7 +300,7 @@ public abstract class AbsController
     abstract public float VerticalMove(float moveValue, float moveForce, bool isGrounded, bool isWalled, bool isRoofed, GameObject targetObject);
     abstract public float Gravity(bool isGrounded, bool isWalled, float gravityVelocity, GameObject targetObject);
     abstract public void Jump(float jumpForce, float gravityVelocity, GameObject playerObject);
-    abstract public void Dash(/* 매개변수 넣을거 이곳에 미리 넣어둘 것 윤동준*/); //윤동준 추상메소드 대쉬 -> PlayerController에서 구현
+    abstract public void Dash(float dashForce, bool isGrounded, bool isBoundaryWalled, GameObject targetObject); //윤동준 추상메소드 대쉬 -> PlayerController에서 구현
     abstract public void NomalAttack(bool isGrounded, bool isNomalAttackKeyDown, float NomalAttackSpeed, GameObject nomalAttackCollider1, GameObject nomalAttackCollider2, GameObject nomalAttackCollider3);
     abstract public void SpecialAttack(bool isGrounded, bool isAttackKeyDown, float delaySpeicalAttackTime, GameObject specialAttakCollider, GameObject nomalAttackCollider1, GameObject nomalAttackCollider2, GameObject nomalAttackCollider3);
     /*abstract public void Spell(GameObject targetObject, GameObject spellPrefabs);*/
@@ -403,6 +403,10 @@ public class PlayerController : AbsController
     public bool isJumpPack;
     public bool isJumpPackDown;
     public bool isRunning;
+
+    float dashVelocity;
+    float dashTime;
+    bool isDashNow;
     #endregion
 
     #region YDJ Field
@@ -465,6 +469,11 @@ public class PlayerController : AbsController
     /* public */
     public float MoveList(float moveValue, float moveForce, bool isGrounded, bool isBoundaryWalled, bool isSpecialAttack, GameObject targetObject)
     {
+        if(isDashNow)
+        {
+            return 0;
+        }
+
         if (isGrounded && isNomalAttacking || isGrounded && isSpecialAttack) // 공격 및 기술 시전시 조건 추가
         {
             playerSpeed = attackMoving(moveValue, moveForce, isBoundaryWalled, targetObject);
@@ -800,15 +809,43 @@ public class PlayerController : AbsController
 
 #region YDJ Dash Method
     /*윤동준 Dash */
-    public override void Dash()
+    public override void Dash(float dashForce, bool isGrounded, bool isBoundaryWalled, GameObject targetObject)
     {
-        Debug.Log("Dash");
+        if(isDashNow)
+        {
+            return;
+        }
+
         /* 윤동준 대쉬구현 */
+        dashForce = 0.3f; //임시 dashForce 값
 
-        //asdfasfsadfasd
-
+        CoroutineHandler.instance.StartCoroutine(ActionDash(targetObject, dashForce));
     }
     #endregion
+
+    public IEnumerator ActionDash(GameObject targetObject, float dashForce)
+    {
+        if(targetObject.transform.localScale.x > 0.0f) // 커스텀 메소드로 처리
+        {
+            dashForce *= +1;
+        }
+        else if(targetObject.transform.localScale.x < 0.0f)
+        {
+            dashForce *= -1;
+        }
+
+        for(float dashTime = 0; dashTime < 0.55f; dashTime += Time.deltaTime)
+        {
+            yield return null;
+
+            isDashNow = true;
+            dashVelocity += dashForce * (0.25f * (playerMass + playerGravity)) * dashTime;
+            targetObject.transform.Translate(new Vector2(dashVelocity, 0));
+        }
+
+        dashVelocity = 0.0f;
+        isDashNow = false;
+    }
 
 
     #region YDJ Shoot Method
