@@ -35,11 +35,9 @@ public class MainCameraController : MonoBehaviour
     private Vector3 targetPosition;
     private Vector3 cameraPosition;
 
-    public float cameraBoundary;
-
     private void Awake()
     {
-        wallCheckerRadius = 0.3f;
+        wallCheckerRadius = 0.4f;
         wallDistance = Mathf.Abs(leftWallChecker.position.x + 3.3f);
 
         shakeRadius = Mathf.Sqrt(Mathf.Pow(shakeCircleX, 2) + Mathf.Pow(shakeCircleY, 2)); //Shake Distance Circle
@@ -91,25 +89,19 @@ public class MainCameraController : MonoBehaviour
         //한 3,4걸음 걸을동안은 카메라의 x축은 움직이면 안된다.
         //y축은 움직이어야한다.
 
-        if(isRoofed && (isLeftWalled || isRightWalled))
+        if (isRoofed && (isLeftWalled || isRightWalled))
         {
-            cameraBoundary = this.transform.position.y;
             return;
         }
         else if(isRoofed && (!isLeftWalled || !isRightWalled)) //중첩 if문 수정
         {
-            if(cameraBoundary == 0)
-            {
-                cameraBoundary = this.transform.position.y;
-            }
-
             if (targetPosition.x - cameraPosition.x > horizontalAddition + Mathf.Epsilon)
             {
-                this.transform.position = new Vector3(targetPosition.x - horizontalAddition, cameraBoundary, this.transform.position.z);
+                this.transform.position = new Vector3(targetPosition.x - horizontalAddition, cameraPosition.y, this.transform.position.z);
             }
             else if (targetPosition.x - cameraPosition.x < -(horizontalAddition + Mathf.Epsilon))
             {
-                this.transform.position = new Vector3(targetPosition.x + horizontalAddition, cameraBoundary, this.transform.position.z);
+                this.transform.position = new Vector3(targetPosition.x + horizontalAddition, cameraPosition.y, this.transform.position.z);
             }
             return;
         }
