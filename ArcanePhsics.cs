@@ -78,16 +78,6 @@ public class ArcanePhsics : MonoBehaviour
     public float playerGravity;
     public float max_moveSpeed;
 
-    /*public float blinkDistance;
-
-    public float delayBlink;*/
-
-    public float delaySpecialAttackTime;
-
-    public GameObject attack1Hit;
-    public GameObject attack2Hit;
-    public GameObject attack3Hit;
-    public GameObject specialAttackHit;
     public GameObject leftBoundaryWall;
     public GameObject rightBoundaryWall;
 
@@ -96,6 +86,7 @@ public class ArcanePhsics : MonoBehaviour
     public GameObject playerObject; //자기 자신을 오브젝트로 넘겨주기 위함
 
     public MainCameraController cameraObject;
+    ArcanePhsics arcane;
     #endregion
 
     #region YDJ Field
@@ -111,8 +102,8 @@ public class ArcanePhsics : MonoBehaviour
     void Awake()
     {
         hero = GetComponent<HeroAttribute>();
-
-        playerController = new PlayerController(hero); // 인스턴스 생성자에 넘겨줄꺼 이곳에 차곡차곡 매개변수 할당하기
+        arcane = GetComponent<ArcanePhsics>();
+        playerController = new PlayerController(hero, arcane); // 인스턴스 생성자에 넘겨줄꺼 이곳에 차곡차곡 매개변수 할당하기
     }
 
     private void Start()
@@ -236,11 +227,6 @@ public class ArcanePhsics : MonoBehaviour
     {
         isDownCharacterDashKey = isDownCharacterDashKeyInputMananger; //대쉬 키를 눌렀다는 것에 대한 true || false를 전달
 
-        if(playerController.isHung)
-        {
-            return;
-        }
-
         /*(코드설명) 윤동준 이곳이 대쉬키 true || false를 받고 PlayerController 클래스의 Dash 함수로 넘어감 */
         playerController.Dash(moveForce, isGrounded, isBoundaryWalled, playerObject);
     }
@@ -266,9 +252,6 @@ public class ArcanePhsics : MonoBehaviour
     public void CharacterNomal_Attack(bool isDownCharacterNomalAttackKeyManager)
     {
         isDownCharacterNomal_AttackKey = isDownCharacterNomalAttackKeyManager;
-
-        playerController.NomalAttack(isGrounded, isDownCharacterNomal_AttackKey, nomal_Attack_Speed ,attack1Hit, attack2Hit, attack3Hit);
-
         /* 입력 받은 키 초기화*/
         isDownCharacterNomal_AttackKey = false;
     }
@@ -277,8 +260,6 @@ public class ArcanePhsics : MonoBehaviour
     public void CharacterSpecial_Attack(bool isDownCharacterSpecialAttackKeyManager)
     {
         isDownCharacterSpecial_AttackKey = isDownCharacterSpecialAttackKeyManager;
-
-        playerController.SpecialAttack(isGrounded, isDownCharacterSpecial_AttackKey, delaySpecialAttackTime, specialAttackHit, attack1Hit, attack2Hit, attack3Hit);
 
         /* 입력 받은 키 초기화*/
         isDownCharacterSpecial_AttackKey = false;
@@ -295,14 +276,12 @@ public class ArcanePhsics : MonoBehaviour
 public abstract class AbsController
 {
     abstract public float DefaultMove(float moveValue, float moveForce, bool isBoundaryWalled, GameObject targetObject);
-    abstract public float AttackMove(float moveValue, float moveForce, bool isBoundaryWalled, GameObject targetObject);
     abstract public float Hrun(float moveValue, float moveForce,bool isGrounded, bool isBoundaryWalled, GameObject targetObject);
     abstract public float VerticalMove(float moveValue, float moveForce, bool isGrounded, bool isWalled, bool isRoofed, GameObject targetObject);
     abstract public float Gravity(bool isGrounded, bool isWalled, float gravityVelocity, GameObject targetObject);
     abstract public void Jump(float jumpForce, float gravityVelocity, GameObject playerObject);
     abstract public void Dash(float dashForce, bool isGrounded, bool isBoundaryWalled, GameObject targetObject); //윤동준 추상메소드 대쉬 -> PlayerController에서 구현
-    abstract public void NomalAttack(bool isGrounded, bool isNomalAttackKeyDown, float NomalAttackSpeed, GameObject nomalAttackCollider1, GameObject nomalAttackCollider2, GameObject nomalAttackCollider3);
-    abstract public void SpecialAttack(bool isGrounded, bool isAttackKeyDown, float delaySpeicalAttackTime, GameObject specialAttakCollider, GameObject nomalAttackCollider1, GameObject nomalAttackCollider2, GameObject nomalAttackCollider3);
+    
     /*abstract public void Spell(GameObject targetObject, GameObject spellPrefabs);*/
     abstract public void Hit(GameObject targetObject, int hitLayer, float dir, Collider2D hitCollide);
 
@@ -378,11 +357,6 @@ public class PlayerController : AbsController
     #endregion
     #region event
     public event Moving defaultMoving; //기본 공격에 관한 움직임들
-    public event Moving attackMoving; // 모든 기술 및 공격들에 관한 움직임들
-
-    public event NomalAttacking nomalAttack1; //기본공격 1타
-    public event NomalAttacking nomalAttack2; //기본공격 2타
-    public event NomalAttacking nomalAttack3; //기본공격 3타
 
     public event HitDelegate nomalHit1;
     public event HitDelegate nomalHit2;
@@ -390,14 +364,6 @@ public class PlayerController : AbsController
     public event HitDelegate specialHit;
     #endregion
     #region public
-    public bool isCheckLastAttack; //애니메이션에서 마지막 3타 공격이 마치는 것을 체크하기 위해
-
-    public bool isInvincibilityStatement; //수정
-    public bool isAttack1;
-    public bool isAttack2;
-    public bool isAttack3;
-
-    public bool isHung; //수정 삭제
 
     public float verticalMoveValue;
     public bool isJumpPack;
@@ -407,6 +373,7 @@ public class PlayerController : AbsController
     float dashVelocity;
     float dashTime;
     bool isDashNow;
+    ArcanePhsics arcane;
     #endregion
 
     #region YDJ Field
@@ -418,7 +385,7 @@ public class PlayerController : AbsController
     #endregion
 
 
-    public PlayerController(HeroAttribute hero) //인스턴스 넘겨줄거 생성자에 저장
+    public PlayerController(HeroAttribute hero, ArcanePhsics arcane) //인스턴스 넘겨줄거 생성자에 저장
     {
         playerMass = 1.0f;
         playerGravity = 1.0f;
@@ -438,24 +405,16 @@ public class PlayerController : AbsController
         minusDir = -1;
 
         defaultMoving += DefaultMove;
-        attackMoving += AttackMove;
-
-        nomalAttack1 += NomalAttacking1;
-        nomalAttack2 += NomalAttacking2;
-        nomalAttack3 += NomalAttacking3;
 
         nomalHit1 += NomalAttack1Knock;
         nomalHit2 += NomalAttack2Knock;
         nomalHit3 += NomalAttack3Knock;
         specialHit += SpecialAttackKnock;
 
-        attackKind = new BitArray(4, false);
-
-        attackExpireCoroutine = AttackExpiration();
-
         this.hero = hero;
         correctionValue = 0.4f;
 
+        this.arcane = arcane;
         #region YDJ Constructer
         /* 이곳 밑에서부터 주석 영역까지 생성자 초기화할 부분 윤동준 */
 
@@ -472,11 +431,6 @@ public class PlayerController : AbsController
         if(isDashNow)
         {
             return 0;
-        }
-
-        if (isGrounded && isNomalAttacking || isGrounded && isSpecialAttack) // 공격 및 기술 시전시 조건 추가
-        {
-            playerSpeed = attackMoving(moveValue, moveForce, isBoundaryWalled, targetObject);
         }
         else
         {
@@ -523,80 +477,6 @@ public class PlayerController : AbsController
         }
     }
     #endregion
-
-    #region Old AttackCondition
-    private AttackStatement AttackCondition()
-    {
-        if (!attackKind[3] & !attackKind[2] & !attackKind[1] & attackKind[0])
-        {
-            return AttackStatement.attack1;
-        }
-        else if (!attackKind[3] & !attackKind[2] & attackKind[1] & attackKind[0] & isNomalAttackNow)
-        {
-            return AttackStatement.attack2;
-        }
-        else if (!attackKind[3] & attackKind[2] & attackKind[1] & attackKind[0] & isNomalAttackNow)
-        {
-            return AttackStatement.attack3;
-        }
-        else if (attackKind[3] & attackKind[2] & attackKind[1] & attackKind[0] & isNomalAttackNow)
-        {
-            return AttackStatement.wait;
-        }
-        else // attack에서 텀을 가질동안을 이쪽으로 넘어오게
-        {
-            return AttackStatement.nothing;
-        }
-    }
-    #endregion
-
-    #region Old Attack
-    private void CheckNomalAttack() // attack statement check
-    {
-        for (int i = 0; i <= attackIndex; i++)
-        {
-            attackKind[i] = true;
-        }
-    }
-
-    private void InitCheckNomalAttack()
-    {
-        isNomalAttackNow = false;
-        isCheckLastAttack = false;
-
-        isAttack1 = false;
-        isAttack2 = false;
-        isAttack3 = false;
-
-        for (int i = 0; i <= attackIndex; i++)
-        {
-            attackKind[i] = false;
-        }
-
-        attackIndex = 0;
-    }
-
-    private void NomalAttacking1(GameObject colliderAttack1)
-    {
-        colliderAttack1.SetActive(true);
-        CoroutineHandler.instance.StartCoroutine(DelayAttack(colliderAttack1));
-        attackIndex++;
-    }
-
-    private void NomalAttacking2(GameObject colliderAttack2)
-    {
-        colliderAttack2.SetActive(true);
-        CoroutineHandler.instance.StartCoroutine(DelayAttack(colliderAttack2));
-        attackIndex++;
-    }
-    private void NomalAttacking3(GameObject colliderAttack3)
-    {
-        colliderAttack3.SetActive(true);
-        CoroutineHandler.instance.StartCoroutine(DelayAttack(colliderAttack3));
-        attackIndex++;
-    }
-    #endregion
-
 
     /*override*/
     #region override Method
@@ -701,46 +581,6 @@ public class PlayerController : AbsController
         return HmoveVelocity;
     }
 
-    public override float AttackMove(float moveValue, float moveForce, bool isBoundaryWalled, GameObject targetObject)
-    {
-        if (isCheckLastAttack)
-        {
-            return 0;
-        }
-
-        switch (MoveCondition(moveValue))
-        {
-            case LiveMoveStatement.right:
-                HmoveVelocity = +moveForce * (0.25f * (playerMass + playerGravity));
-                targetObject.transform.localScale = new Vector3(+1.0f, 1.0f, 1.0f);
-                break;
-            case LiveMoveStatement.left:
-                HmoveVelocity = -moveForce * (0.25f * (playerMass + playerGravity));
-                targetObject.transform.localScale = new Vector3(-1.0f, 1.0f, 1.0f);
-                break;
-            case LiveMoveStatement.wait:
-                if (targetObject.transform.localScale.x > 0.0f)
-                {
-                    HmoveVelocity = +moveForce * (0.1f * (playerMass + playerGravity));
-                    targetObject.transform.localScale = new Vector3(+1.0f, 1.0f, 1.0f);
-                }
-                else if (targetObject.transform.localScale.x < 0.0f)
-                {
-                    HmoveVelocity = -moveForce * (0.1f * (playerMass + playerGravity));
-                    targetObject.transform.localScale = new Vector3(-1.0f, 1.0f, 1.0f);
-                }
-                break;
-        }
-
-        if (isBoundaryWalled)
-        {
-            return HmoveVelocity;
-        }
-
-        targetObject.transform.Translate(new Vector2(HmoveVelocity, 0));
-        return HmoveVelocity;
-    }
-
     public override float VerticalMove(float moveValue, float moveForce, bool isGrounded, bool isWalled, bool isRoofed, GameObject targetObject)
     {
         verticalMoveValue = moveValue;
@@ -817,36 +657,11 @@ public class PlayerController : AbsController
         }
 
         /* 윤동준 대쉬구현 */
-        dashForce = 0.3f; //임시 dashForce 값
+        dashForce = 0.25f; //임시 dashForce 값
 
         CoroutineHandler.instance.StartCoroutine(ActionDash(targetObject, dashForce));
     }
     #endregion
-
-    public IEnumerator ActionDash(GameObject targetObject, float dashForce)
-    {
-        if(targetObject.transform.localScale.x > 0.0f) // 커스텀 메소드로 처리
-        {
-            dashForce *= +1;
-        }
-        else if(targetObject.transform.localScale.x < 0.0f)
-        {
-            dashForce *= -1;
-        }
-
-        for(float dashTime = 0; dashTime < 0.55f; dashTime += Time.deltaTime)
-        {
-            yield return null;
-
-            isDashNow = true;
-            dashVelocity += dashForce * (0.25f * (playerMass + playerGravity)) * dashTime;
-            targetObject.transform.Translate(new Vector2(dashVelocity, 0));
-        }
-
-        dashVelocity = 0.0f;
-        isDashNow = false;
-    }
-
 
     #region YDJ Shoot Method
     /*윤동준 Shoot*/
@@ -868,94 +683,7 @@ public class PlayerController : AbsController
 
 
 #region Attack Combo Old Method
-    /* Nomal Attack Old Method */
-    public override void NomalAttack(bool isGrounded, bool isNomalAttackKeyDown, float nomalAttackSpeed, GameObject nomalAttackCollider1, GameObject nomalAttackCollider2, GameObject nomalAttackCollider3)
-    {
-        if (!isGrounded)
-        {
-            return;
-        }
-
-        nomalAttackTime = nomalAttackSpeed;
-        isNomalAttacking = isNomalAttackKeyDown;
-
-        CheckNomalAttack();
-
-        CoroutineHandler.instance.StopCoroutine(attackExpireCoroutine); // 공격키 누를때마다 딜레이 시간 초기화
-        attackExpireCoroutine = AttackExpiration();
-        CoroutineHandler.instance.StartCoroutine(attackExpireCoroutine);
-
-        try
-        {
-            switch (AttackCondition()) //애니메이션 처리에 있어서 공격 할때 enum으로 캐릭터를 따로 분리하여 각 캐릭터에 맞는 애니메이션을 작동시킨다.
-            {
-                case AttackStatement.attack1:
-                    isNomalAttackNow = true;
-                    isAttack1 = true;
-                    TestEaseliaAni.instance.EaselNomal_Attack(isNomalAttackKeyDown); //Singleton 말고 딴거 쓸 것 수정
-                    nomalAttack1(nomalAttackCollider1);                   
-                    break;
-                case AttackStatement.attack2:
-                    isAttack1 = false;
-                    isAttack2 = true;
-                    TestEaseliaAni.instance.EaselNomal_Attack(isNomalAttackKeyDown); //Singleton 말고 딴거 쓸 것 수정
-                    CoroutineHandler.instance.StartCoroutine(CutomInvoke(nomalAttack2, nomalAttackCollider2));
-                    break;
-                case AttackStatement.attack3:
-                    isAttack2 = false;
-                    isAttack3 = true;
-                    TestEaseliaAni.instance.EaselNomal_Attack(isNomalAttackKeyDown); //Singleton 말고 딴거 쓸 것 수정
-                    CoroutineHandler.instance.StartCoroutine(CutomInvoke(nomalAttack3, nomalAttackCollider3));
-                    break;
-                case AttackStatement.wait:
-                    isAttack3 = false;
-
-                    if (isCheckLastAttack)
-                    {                      
-                        break;
-                    }
-                    else
-                    {
-                        CoroutineHandler.instance.StartCoroutine(StopAttackDelay());
-                        TestEaseliaAni.instance.EaselNomal_Attack(isNomalAttackKeyDown); //Singleton 말고 딴거 쓸 것 수정
-                    }
-                    break;
-                case AttackStatement.nothing: //오류 처리
-                    Debug.Log("Nothing Instruction");
-                    break;
-            }
-        }
-        catch(System.Exception e)
-        {
-            Debug.Log(e);
-        }
-
-        CoroutineHandler.instance.StartCoroutine(AttackMoveWait());
-    }
-
-    public override void SpecialAttack(bool isGrounded, bool isAttackKeyDown, float delayTime, GameObject specialAttakCollider, GameObject nomalAttackCollider1, GameObject nomalAttackCollider2, GameObject nomalAttackCollider3)
-    {
-
-        if(isDelaySpecialAttack)
-        {
-            return;
-        }
-
-        isSpecialAttacking = isAttackKeyDown;
-
-        nomalAttackCollider1.SetActive(false); //for문으로 받아올까?
-        nomalAttackCollider2.SetActive(false);
-        nomalAttackCollider3.SetActive(false);
-
-        specialAttakCollider.SetActive(true);
-
-        CoroutineHandler.instance.StartCoroutine(DelaySpecialAttack(delayTime));
-
-        CoroutineHandler.instance.StartCoroutine(DelayAttack(specialAttakCollider));
-
-        CoroutineHandler.instance.StartCoroutine(AttackMoveWait());
-    }
-
+  
     /*public override void Spell(GameObject targetObject, GameObject spellPrefabs)
     {
         if (targetObject.transform.localScale.x > 0)
@@ -987,31 +715,10 @@ public class PlayerController : AbsController
 
         nomalTime = 0.0f;
         specialTime = 0.0f;
-
-       /* if(!isSpecialAttacked) // 중력보정으로인한 무적 수정
-        {
-            Debug.Log("asdfaf");
-            CoroutineHandler.instance.StartCoroutine(Invincibilited()); // 중력보정 수정 완료시 발동
-        }*/
-        //CoroutineHandler.instance.StartCoroutine(Invincibilited()); // 중력보정 수정 완료시 발동
-    }
-
-    public IEnumerator Invincibilited() //중력 보정 후 땅에 떨어졌을때 발동
-    {
-        isInvincibilityStatement = true;
-
-        yield return new WaitForSeconds(1.5f);
-
-        isInvincibilityStatement = false;
     }
 
     public override void Hit(GameObject targetObject, int hitLayer, float dir, Collider2D hitCollide)
     {
-        if(isInvincibilityStatement)
-        {
-            return;
-        }
-
         int hittingDir = 0;
 
         if(dir > 0.0f)
@@ -1131,52 +838,35 @@ public class PlayerController : AbsController
         }
     }
 
-    public IEnumerator DelaySpecialAttack(float delayTime)
+    public IEnumerator ActionDash(GameObject targetObject, float dashForce)
     {
-        isDelaySpecialAttack = true;
-        yield return new WaitForSeconds(delayTime);
-        isDelaySpecialAttack = false;
-    }
-
-    public IEnumerator AttackExpiration()
-    {
-        yield return new WaitForSeconds(0.5f);
-        InitCheckNomalAttack();
-    }
-
-    public IEnumerator CutomInvoke(NomalAttacking attacking, GameObject collider)
-    {
-        if (isCheckAttackTime)
+        if (targetObject.transform.localScale.x > 0.0f) // 커스텀 메소드로 처리
         {
-            yield break;
+            dashForce *= +1;
+        }
+        else if (targetObject.transform.localScale.x < 0.0f)
+        {
+            dashForce *= -1;
         }
 
-        isCheckAttackTime = true;
+        for (float dashTime = 0; dashTime < 0.55f; dashTime += Time.deltaTime)
+        {
+            yield return null;
 
-        yield return new WaitForSeconds(nomalAttackTime);
-        isCheckAttackTime = false;
-        attacking(collider);
-    }
+            if (arcane.isBoundaryWalled) //강제 이동을 멈춤을 위한 if문
+            {
+                dashVelocity = 0;
+                isDashNow = false;
+                yield break;
+            }
 
-    public IEnumerator StopAttackDelay() //3타를 다 하고 그다음 일반공격 딜레이
-    {
-        isCheckLastAttack = true;
-        TestEaseliaAni.instance.EaselNomal_Attack(isNomalAttacking); //Singleton 말고 딴거 쓸 것 수정
-        yield return new WaitForSeconds(0.4f);
-        InitCheckNomalAttack();
-    }
+            isDashNow = true;
+            dashVelocity += dashForce * (0.25f * (playerMass + playerGravity)) * dashTime;
+            targetObject.transform.Translate(new Vector2(dashVelocity, 0));
+        }
 
-    public IEnumerator DelayAttack(GameObject collider) //collider 바로 꺼지지 말고 좀 이따가 꺼지게 해서 공격이 프레임 내에 들어가게 설정
-    {
-        yield return new WaitForSeconds(0.1f);
-        collider.SetActive(false);
-    }
-
-    public IEnumerator AttackMoveWait() //공격동안 AttackMove가 비활성화를 하기 위한 코루틴
-    {
-        yield return new WaitForSeconds(0.5f);
-        isSpecialAttacking = false;
-        isNomalAttacking = false;
+        dashVelocity = 0.0f;
+        isDashNow = false;
     }
 }
 #endregion
@@ -1189,16 +879,6 @@ enum LiveMoveStatement
     wait,
     up,
     down
-}
-
-[Flags]
-enum AttackStatement
-{
-    attack1,
-    attack2,
-    attack3,
-    wait,
-    nothing
 }
 #endregion
 
@@ -1222,185 +902,3 @@ public class CoroutineHandler : MonoBehaviour //나중에 다른 오브젝트 �
     }
 }
 #endregion
-
-
-
-
-
-/*IEnumerator Dash() //혹시 모를 나중을 대비해서 Dash는 남겨둠
-{ 
-    if(!isGrounded) //점프 대쉬
-    {
-        while(!isGrounded)
-        {
-            yield return null;
-            isDownCharacterJumpKey = false;// 점프 대쉬중이므로 이미 점프가 끝났기 때문에 점프키는 false
-            if(this.transform.localScale.x > 0.0f)
-            {
-                playerHVelocity = +dashSpeed;
-            }
-            else if(this.transform.localScale.x < 0.0f)
-            {
-                 playerHVelocity = -dashSpeed;
-            }
-
-            if(Input.GetButtonDown("Dash"))
-            {
-                yield break;
-            }
-            ani.SetBool("isDashkeyDown",isDownCharacterDashKey);
-            ani.SetBool("isJumpkeyDown", isDownCharacterJumpKey);
-            transform.Translate(new Vector2(playerHVelocity, 0.0f));
-        }
-
-        if(isGrounded) //땅에 닿으면 그대로 멈춤
-        {
-            dashTime = 0.0f;
-            playerHVelocity = 0.0f;
-            isDownCharacterDashKey = false;
-            ani.SetBool("isGrounded", isGrounded);
-            ani.SetBool("isDashkeyDown",isDownCharacterDashKey);
-            yield break;
-        }
-    }
-
-    else if(isGrounded) //땅에 닿고 있을때의 대쉬(일반대쉬)
-    {
-        while(dashTime < 0.5f) //대쉬 시작(계속 달려나감)
-        {
-             yield return null;
-
-            dashTime += Time.deltaTime;
-
-            if(this.transform.localScale.x > 0.0f)
-            {
-                 playerHVelocity = +dashSpeed;
-            }
-
-            else if(this.transform.localScale.x < 0.0f)
-            {
-                 playerHVelocity = -dashSpeed;
-            }
-
-             if(Input.GetButtonDown("Dash")) //또 대쉬키를 눌러도 더 이동하지 못하게 방지
-            {
-                 yield break;
-            }
-
-            if(Input.GetButtonUp("Dash") && inputHMoveValue == 0.0f)// 대쉬 키 떼면 멈춤
-            {
-                playerHVelocity = 0.0f;
-                dashTime = 0.0f;
-                isDownCharacterDashKey = false;
-                ani.SetBool("isDashkeyDown",isDownCharacterDashKey);
-                yield break;
-            }
-
-            transform.Translate(new Vector2(playerHVelocity, 0.0f));
-
-            ani.SetBool("isGrounded", isGrounded);
-            ani.SetBool("isDashkeyDown",isDownCharacterDashKey);
-        }
-    }
-
-        if(isDownCharacterJumpKey && !isGrounded) //점프키를 눌렀을때(대쉬 점프)
-        {
-            while(!isGrounded)
-            {
-                yield return null;
-                isDownCharacterJumpKey = true; //대쉬 점프이므로 점프키가 true
-                if(this.transform.localScale.x > 0.0f)
-                {
-                    playerHVelocity = +dashSpeed;
-                }
-                else if(this.transform.localScale.x < 0.0f)
-                {
-                    playerHVelocity = -dashSpeed;
-                }
-
-                if(Input.GetButtonDown("Dash"))
-                {
-                    yield break;
-                }
-                ani.SetBool("isJumpkeyDown", isDownCharacterJumpKey);
-                transform.Translate(new Vector2(playerHVelocity, 0.0f));
-            }
-            //땅에 닿으면 그대로 멈춤
-            if(isGrounded)
-            {
-                dashTime = 0.0f;
-                playerHVelocity = 0.0f;
-                isDownCharacterDashKey = false;
-                isDownCharacterJumpKey = false;
-                ani.SetBool("isGrounded", isGrounded);
-                ani.SetBool("isJumpkeyDown", isDownCharacterJumpKey);
-                ani.SetBool("isDashkeyDown",isDownCharacterDashKey);
-                yield break;
-            }
-        }
-
-            dashTime = 0.0f;
-            playerHVelocity = dashSpeed;
-
-            if(this.transform.localScale.x > 0.0f) //점프키 안누르고 일반 대쉬 정방향
-            {
-                while(playerHVelocity > -Mathf.Epsilon)
-                {
-                    yield return null;
-                    dashTime += Time.deltaTime;
-
-                    playerHVelocity = dashSpeed - dashTime*1.2f;
-
-                    if(Input.GetButtonDown("Dash")) //또 대쉬키를 눌러도 더 이동하지 못하게 방지
-                    {
-                         yield break;
-                    }
-
-                    transform.Translate(new Vector2(playerHVelocity, 0.0f));
-
-                    ani.SetBool("isGrounded", isGrounded);
-                    ani.SetBool("isDashkeyDown",isDownCharacterDashKey);
-                }
-            }
-
-            dashTime = 0.0f;
-            playerHVelocity = -dashSpeed;
-
-            if(this.transform.localScale.x < 0.0f) //점프키 안누르고 일반 대쉬 정방향
-            {
-                while(playerHVelocity < +Mathf.Epsilon)
-                {
-                    yield return null;
-                    dashTime += Time.deltaTime;
-
-                    playerHVelocity = -dashSpeed + dashTime*1.2f;
-
-                    if(Input.GetButtonDown("Dash")) //또 대쉬키를 눌러도 더 이동하지 못하게 방지
-                    {
-                         yield break;
-                    }
-
-                    transform.Translate(new Vector2(playerHVelocity, 0.0f));
-
-                    ani.SetBool("isGrounded", isGrounded);
-                    ani.SetBool("isDashkeyDown",isDownCharacterDashKey);
-                }
-            }
-
-        if(playerHVelocity < -Mathf.Epsilon)
-        {
-            isDownCharacterDashKey = false;
-            playerHVelocity = 0.0f;
-            dashTime = 0.0f;
-        }
-
-        else if(playerHVelocity > +Mathf.Epsilon)
-        {
-            isDownCharacterDashKey = false;
-            playerHVelocity = 0.0f;
-            dashTime = 0.0f;
-        }
-
-        ani.SetBool("isDashkeyDown",isDownCharacterDashKey);
-}*/
-
